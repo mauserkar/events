@@ -3,7 +3,7 @@ name: Build Binaries
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -17,19 +17,19 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: linux-x64
-            output_name: events
+            output_name: events_linux_x64
 
           - os: windows-latest
             artifact_name: windows-x64
-            output_name: events.exe
+            output_name: events_windows_x64.exe
 
           - os: macos-latest
             artifact_name: macos-intel
-            output_name: events
+            output_name: events_macos_intel
 
           - os: macos-latest
             artifact_name: macos-arm64
-            output_name: events
+            output_name: events_macos_arm64
 
     runs-on: ${{ matrix.os }}
 

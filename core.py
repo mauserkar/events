@@ -70,6 +70,99 @@ def normalize_name(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Event schema validation
+# ---------------------------------------------------------------------------
+
+
+def validate_event(event: dict, index: int) -> tuple[bool, str]:
+    """
+    Validate a single calendar event against the expected Microsoft Graph schema.
+    Returns (is_valid, error_message).
+
+    Expected minimal structure:
+    {
+        "subject": str (optional, defaults to "(no title)"),
+        "start": {"dateTime": str, "timeZone": str (optional)},
+        "end": {"dateTime": str, "timeZone": str (optional)}
+    }
+    """
+    if not isinstance(event, dict):
+        return False, f"Event {index}: not a dictionary (got {type(event).__name__})"
+
+    # Validate start field
+    start = event.get("start")
+    if not isinstance(start, dict):
+        return False, f"Event {index}: missing or invalid 'start' field (expected dict)"
+
+    start_dt = start.get("dateTime")
+    if not start_dt or not isinstance(start_dt, str):
+        return (
+            False,
+            f"Event {index}: missing or invalid 'start.dateTime' (expected non-empty string)",
+        )
+
+    # Validate end field
+    end = event.get("end")
+    if not isinstance(end, dict):
+        return False, f"Event {index}: missing or invalid 'end' field (expected dict)"
+
+    end_dt = end.get("dateTime")
+    if not end_dt or not isinstance(end_dt, str):
+        return (
+            False,
+            f"Event {index}: missing or invalid 'end.dateTime' (expected non-empty string)",
+        )
+
+    # Validate datetime format
+    try:
+        parse_date(start_dt)
+        parse_date(end_dt)
+    except ValueError as exc:
+        return False, f"Event {index}: invalid datetime format - {exc}"
+
+    # Check that end is after start
+    try:
+        if parse_date(end_dt) <= parse_date(start_dt):
+            return False, f"Event {index}: end time must be after start time"
+    except Exception:
+        pass  # Already validated above
+
+    return True, ""
+
+
+def validate_events(events: list[dict], max_errors: int = 5) -> tuple[list[dict], int]:
+    """
+    Validate a list of events, filtering out invalid ones.
+    Returns (valid_events, skipped_count).
+
+    Args:
+        events: List of event dictionaries to validate
+        max_errors: Maximum number of error messages to print
+
+    Returns:
+        Tuple of (valid_events_list, number_of_skipped_events)
+    """
+    valid = []
+    skipped = 0
+    errors_printed = 0
+
+    for i, event in enumerate(events):
+        is_valid, error = validate_event(event, i)
+        if is_valid:
+            valid.append(event)
+        else:
+            skipped += 1
+            if errors_printed < max_errors:
+                print(f"  ⚠️  {error}")
+                errors_printed += 1
+            elif errors_printed == max_errors:
+                print(f"  ⚠️  ... and more errors (suppressed)")
+                errors_printed += 1
+
+    return valid, skipped
+
+
+# ---------------------------------------------------------------------------
 # Core grouping logic
 # ---------------------------------------------------------------------------
 
@@ -98,15 +191,15 @@ def group_appointments(events: list[dict], normalize: bool = True) -> dict[str, 
 
     Malformed events are skipped with a warning (max 3 printed).
     """
+    # First validate all events
+    valid_events, validation_skipped = validate_events(events)
+
     groups: dict[str, dict] = defaultdict(
         lambda: {"display_name": "", "appointments": [], "total_minutes": 0.0}
     )
-    skipped = 0
+    skipped = validation_skipped
 
-    for event in events:
-        if not isinstance(event, dict):
-            skipped += 1
-            continue
+    for event in valid_events:
         try:
             subject = event.get("subject", "(no title)")
             key = normalize_name(subject) if normalize else subject
@@ -149,11 +242,16 @@ def group_appointments(events: list[dict], normalize: bool = True) -> dict[str, 
 # ---------------------------------------------------------------------------
 
 
-def load_events_from_file(path: Path) -> list[dict] | None:
+def load_events_from_file(path: Path, validate: bool = True) -> list[dict] | None:
     """
     Load a Graph API JSON file.  Accepts:
     - A plain list  → returned as-is
     - A dict with a 'value' key  → value returned
+
+    Args:
+        path: Path to the JSON file
+        validate: If True, validates event schema and filters invalid events
+
     Returns None and prints a warning on any error.
     """
     try:
@@ -166,16 +264,25 @@ def load_events_from_file(path: Path) -> list[dict] | None:
     if isinstance(data, list):
         if len(data) == 0:
             print(f"  ⚠️  {path.name}: empty list")
-        return data
-
-    if isinstance(data, dict):
+        events = data
+    elif isinstance(data, dict):
         if "value" in data:
-            return data["value"]
-        print(f"  ⚠️  {path.name}: unexpected dict keys: {list(data.keys())[:8]}")
+            events = data["value"]
+        else:
+            print(f"  ⚠️  {path.name}: unexpected dict keys: {list(data.keys())[:8]}")
+            return None
+    else:
+        print(f"  ⚠️  {path.name}: unexpected JSON type: {type(data).__name__}")
         return None
 
-    print(f"  ⚠️  {path.name}: unexpected JSON type: {type(data).__name__}")
-    return None
+    # Validate events if requested
+    if validate and events:
+        valid_events, skipped = validate_events(events)
+        if skipped:
+            print(f"  ⚠️  {path.name}: {skipped} invalid event(s) skipped during load")
+        return valid_events
+
+    return events
 
 
 def export_processed_json(groups: dict[str, dict], output_path: Path) -> None:
