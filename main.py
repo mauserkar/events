@@ -6,6 +6,8 @@ Full calendar-events pipeline orchestrator:
   2. Process — Group by name, sum hours, export JSON + CSV
   3. Report  — Generate a self-contained interactive HTML report
 
+Supports company grouping: create reports/company_mapping.json to enable.
+
 Usage examples
 --------------
     # Full run: fetch → process → report
@@ -27,12 +29,8 @@ Usage examples
     # Custom output directory for the HTML report
     python main.py -t <TOKEN> -m 5 -y 2026 --output-dir ./my_reports
 
-Directory layout
-----------------
-    reports/
-      events/          ← raw JSON from Graph API
-      processed/       ← grouped JSON + CSV
-      report.html      ← HTML report (default location)
+    # Disable company grouping
+    python main.py -t <TOKEN> -m 3 -y 2026 --no-company
 """
 
 from __future__ import annotations
@@ -51,8 +49,10 @@ from core import (
     export_processed_json,
     format_duration,
     generate_html,
-    group_appointments,
+    group_appointments_by_company,
     load_events_from_file,
+    load_company_mapping,
+    is_company_grouping_enabled,
 )
 
 # ---------------------------------------------------------------------------
@@ -160,9 +160,21 @@ def step_process(
     processed_dir: Path,
     normalize: bool = True,
     do_csv: bool = True,
+    use_company_grouping: bool = None,
 ) -> list[dict]:
     """Group events from each file and export JSON + CSV."""
+    # Load company mapping if needed
+    if use_company_grouping is None:
+        load_company_mapping()
+        use_company_grouping = is_company_grouping_enabled()
+
     print(f"\n📊 Step 2: Processing {len(input_files)} file(s)…")
+    if use_company_grouping:
+        print(f"   🏢 Company grouping ENABLED")
+    else:
+        print(f"   📋 Company grouping DISABLED")
+    print()
+
     results: list[dict] = []
 
     for path in input_files:
@@ -172,9 +184,18 @@ def step_process(
             print("skipped")
             continue
 
-        groups = group_appointments(events, normalize=normalize)
-        total_min = sum(g["total_minutes"] for g in groups.values())
-        total_appts = sum(len(g["appointments"]) for g in groups.values())
+        groups = group_appointments_by_company(
+            events, normalize=normalize, use_company_grouping=use_company_grouping
+        )
+
+        total_min = 0
+        total_appts = 0
+        unique_names = 0
+
+        for company_data in groups.values():
+            total_appts += company_data["total_appointments"]
+            total_min += company_data["total_minutes"]
+            unique_names += len(company_data["clients"])
 
         json_out = processed_dir / path.name
         export_processed_json(groups, json_out)
@@ -183,10 +204,12 @@ def step_process(
             csv_out = processed_dir / path.with_suffix(".csv").name
             export_csv(groups, csv_out)
 
-        result = _build_file_result(path.name, groups, total_appts, total_min)
+        result = _build_file_result(
+            path.name, groups, total_appts, total_min, unique_names
+        )
         results.append(result)
         print(
-            f"✅ {total_appts} appointments, {len(groups)} names, "
+            f"✅ {total_appts} appointments, {unique_names} names, "
             f"{format_duration(total_min)}"
         )
 
@@ -210,31 +233,79 @@ def _load_processed_files(processed_dir: Path) -> list[dict]:
             print(f"  ⚠️  Could not load {pf.name}: {exc}")
             continue
 
-        total_min = sum(item.get("total_minutes", 0) for item in data)
-        total_appts = sum(item.get("total_appointments", 0) for item in data)
+        # Check if this is company-grouped JSON
+        if data and "company" in data[0]:
+            # Company-grouped format
+            total_min = sum(item.get("total_minutes", 0) for item in data)
+            total_appts = sum(item.get("total_appointments", 0) for item in data)
+            unique_names = sum(len(item.get("clients", [])) for item in data)
 
-        groups_list = [
-            {
-                "name": item.get("name", ""),
-                "count": item.get("total_appointments", 0),
-                "total_minutes": item.get("total_minutes", 0),
-                "total_duration": item.get("total_time_formatted", "0m"),
-                "appointments": item.get("appointments", []),
-            }
-            for item in data
-        ]
+            groups_list = []
+            for item in data:
+                clients_list = []
+                for client in item.get("clients", []):
+                    clients_list.append(
+                        {
+                            "name": client.get("name", ""),
+                            "count": client.get("total_appointments", 0),
+                            "total_minutes": client.get("total_minutes", 0),
+                            "total_duration": client.get("total_time_formatted", "0m"),
+                            "appointments": client.get("appointments", []),
+                        }
+                    )
+                groups_list.append(
+                    {
+                        "name": item.get("company", ""),
+                        "is_company": True,
+                        "total_minutes": item.get("total_minutes", 0),
+                        "total_duration": item.get("total_time_formatted", "0m"),
+                        "total_appointments": item.get("total_appointments", 0),
+                        "clients": clients_list,
+                    }
+                )
 
-        results.append(
-            {
-                "filename": pf.name,
-                "total_appointments": total_appts,
-                "total_minutes": total_min,
-                "total_duration": format_duration(total_min),
-                "unique_names": len(data),
-                "groups": groups_list,
-            }
+            results.append(
+                {
+                    "filename": pf.name,
+                    "total_appointments": total_appts,
+                    "total_minutes": total_min,
+                    "total_duration": format_duration(total_min),
+                    "unique_names": unique_names,
+                    "is_company_grouped": True,
+                    "groups": groups_list,
+                }
+            )
+        else:
+            # Flat format (legacy)
+            total_min = sum(item.get("total_minutes", 0) for item in data)
+            total_appts = sum(item.get("total_appointments", 0) for item in data)
+
+            groups_list = [
+                {
+                    "name": item.get("name", ""),
+                    "count": item.get("total_appointments", 0),
+                    "total_minutes": item.get("total_minutes", 0),
+                    "total_duration": item.get("total_time_formatted", "0m"),
+                    "appointments": item.get("appointments", []),
+                }
+                for item in data
+            ]
+
+            results.append(
+                {
+                    "filename": pf.name,
+                    "total_appointments": total_appts,
+                    "total_minutes": total_min,
+                    "total_duration": format_duration(total_min),
+                    "unique_names": len(data),
+                    "is_company_grouped": False,
+                    "groups": groups_list,
+                }
+            )
+
+        print(
+            f"  ✅ {pf.name}: {total_appts} appointments, {unique_names if 'unique_names' in locals() else len(data)} names"
         )
-        print(f"  ✅ {pf.name}: {total_appts} appointments, {len(data)} names")
 
     return results
 
@@ -288,6 +359,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Skip CSV export in Step 2",
     )
+    p.add_argument(
+        "--no-company",
+        dest="use_company",
+        action="store_false",
+        help="Disable company grouping (even if company_mapping.json exists)",
+    )
 
     # Skip flags
     p.add_argument(
@@ -315,7 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for the HTML report (default: reports/)",
     )
 
-    p.set_defaults(normalize=True, do_csv=True)
+    p.set_defaults(normalize=True, do_csv=True, use_company=True)
     return p
 
 
@@ -354,6 +431,18 @@ def main() -> None:
     events_dir = reports_dir / "events"
     processed_dir = reports_dir / "processed"
     output_html_dir = Path(args.output_dir) if args.output_dir else reports_dir
+
+    # Load company mapping if it exists
+    use_company = args.use_company
+    if use_company:
+        load_company_mapping()
+        if is_company_grouping_enabled():
+            print(f"🏢 Company grouping ENABLED")
+        else:
+            print(f"📋 No company mapping found - using flat grouping")
+            print(f"   Create reports/company_mapping.json to enable company grouping")
+    else:
+        print(f"📋 Company grouping DISABLED by --no-company")
 
     results: list[dict] = []
 
@@ -394,6 +483,7 @@ def main() -> None:
             processed_dir,
             normalize=args.normalize,
             do_csv=args.do_csv,
+            use_company_grouping=use_company,
         )
         if not results:
             print("❌ No events could be processed. Aborting.")

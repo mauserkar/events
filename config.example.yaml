@@ -1,0 +1,111 @@
+# Configuración del sistema de calendario
+# ========================================
+
+# Configuración global de facturación
+# Estos valores se usan como predeterminados para todas las facturas
+invoice_defaults:
+  # Datos del emisor (tu empresa)
+  from:
+    name: "Tu Empresa S.L."
+    tax_id: "B-12345678"
+    email: "billing@tuempresa.com"
+    address: "Calle Principal 123, 28001 Madrid"
+    phone: "+34 900 123 456"
+    website: "www.tuempresa.com"
+
+  # Configuración por defecto
+  defaults:
+    hourly_rate: 75.0 # Tarifa por hora en euros
+    vat_rate: 21.0 # Porcentaje de IVA
+    currency: "EUR"
+    payment_terms: "Pago a 30 días"
+    bank_account: "ES00 0000 0000 0000 0000 0000"
+
+  # Notas que aparecen en todas las facturas
+  notes: |
+    Gracias por confiar en nosotros.
+    Para cualquier consulta sobre esta factura, no dude en contactarnos.
+
+# Mapeo de clientes a empresas
+# Formato: "nombre_cliente": "nombre_empresa"
+company_mapping:
+  # Empresa 1
+  "Alineación de objetivos OKR": "Empresa 1"
+
+  # Empresa 2
+  "Café virtual de equipo": "Empresa 2"
+  "Daily Standup Meeting": "Empresa 2"
+  "Demo de producto final": "Empresa 2"
+
+  # Empresa 3
+  "Entrevista técnico/candidato": "Empresa 3"
+  "Llamada con Cliente - Feedback": "Empresa 3"
+  "Planificación Trimestral": "Empresa 3"
+  "Reunión de Sincronización": "Empresa 3"
+  "Revisión de arquitectura técnica": "Empresa 3"
+  "Revisión de Proyecto Alpha": "Empresa 3"
+  "Seguimiento de soporte e incidencias": "Empresa 3"
+  "Sesión de Mentoring y Diseño": "Empresa 3"
+
+  # Empresa independiente (sin agrupar)
+  "Laura Martínez": "Laura Martínez" # Se mostrará como empresa individual
+
+  # Clientes que no aparecen aquí se muestran como empresas individuales
+
+# Configuración específica por empresa
+# Estos valores sobrescriben los globales para facturas de esa empresa
+company_settings:
+  "Empresa 1":
+    from:
+      # Opcional: datos específicos para facturas de ACME
+      # Si no se especifican, usan los globales
+      reference: "Contrato ACME-2024-001"
+    defaults:
+      hourly_rate: 85.0 # Tarifa especial para ACME
+      vat_rate: 21.0
+    notes: |
+      Precios especiales según contrato marco.
+      Facturación mensual por servicios prestados.
+
+  "Empresa 2":
+    defaults:
+      hourly_rate: 95.0 # Tarifa premium
+      vat_rate: 21.0
+    notes: |
+      Servicios de consultoría tecnológica.
+      Proyecto de transformación digital.
+
+# Configuración específica por cliente
+# Para casos donde un cliente necesita configuración individual
+client_settings:
+  "Laura Martínez":
+    defaults:
+      hourly_rate: 60.0 # Tarifa reducida
+    notes: |
+      Tarifa especial por convenio.
+      Facturación trimestral.
+
+# Formatos de número de factura
+# Variables disponibles: {year}, {month}, {day}, {seq}
+invoice_number_format: "INV-{year}{month:02d}{seq:04d}"
+invoice_number_seq: 1 # Secuencia inicial
+
+# Preferencias del informe
+report_settings:
+  # Agrupar por empresa automáticamente (si hay mapeo)
+  auto_company_grouping: true
+
+  # Ordenar empresas por tiempo total (descendente)
+  sort_companies_by_time: true
+
+  # Mostrar gráfico de barras en el informe
+  show_bar_chart: true
+
+  # Colapsar empresas por defecto
+  collapse_companies_by_default: false
+
+  # Colapsar clientes por defecto
+  collapse_clients_by_default: true
+
+  # Tema del informe (light, dark, auto)
+  theme: "auto"
