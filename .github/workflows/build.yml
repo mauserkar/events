@@ -61,21 +61,24 @@ jobs:
             --onefile \
             --follow-imports \
             --assume-yes-for-downloads \
+            --output-filename=${{ matrix.output_name }} \
+            --output-dir=build \
             main.py
 
-      - name: Prepare artifact (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Prepare artifact
         shell: bash
         run: |
-          mkdir artifact
-          cp dist/* artifact/
-
-      - name: Prepare artifact (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          mkdir artifact
-          Copy-Item dist\* artifact\
+          mkdir -p artifact
+          # Nuitka pone el ejecutable en build/ por defecto con --output-dir
+          if [ -f "build/${{ matrix.output_name }}" ]; then
+            cp build/${{ matrix.output_name }} artifact/
+          elif [ -f "${{ matrix.output_name }}" ]; then
+            cp ${{ matrix.output_name }} artifact/
+          else
+            echo "Error: Executable not found"
+            ls -la build/ 2>/dev/null || ls -la
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
