@@ -23,7 +23,7 @@ jobs:
             artifact_name: windows-x64
             output_name: events.exe
 
-          - os: macos-13
+          - os: macos-latest
             artifact_name: macos-intel
             output_name: events
 
