@@ -26,7 +26,6 @@ import sys
 from pathlib import Path
 
 from core import (
-    export_csv,
     generate_html,
     group_appointments_by_company,
     load_events_from_file,

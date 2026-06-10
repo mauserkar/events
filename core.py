@@ -16,7 +16,6 @@ import unicodedata
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 # Try to import yaml, fall back to pyyaml if needed
 try:
@@ -29,7 +28,7 @@ except ImportError:
 # Configuration management
 # ---------------------------------------------------------------------------
 
-_CONFIG_FILE = Path("reports") / "config.yaml"
+_CONFIG_FILE = Path("config.yaml")
 _config_cache: dict | None = None
 
 
@@ -106,8 +105,6 @@ def get_invoice_number() -> str:
         minute=now.minute,
     )
 
-    # Increment sequence for next time (optional - would need to save back to file)
-    # For now, just return the generated number
     return result
 
 
@@ -224,7 +221,6 @@ def is_company_grouping_enabled() -> bool:
 
 def parse_date(dt_str: str) -> datetime:
     """Parse an ISO 8601 datetime string (with or without timezone)."""
-    # Strip trailing 'Z' so fromisoformat works on Python < 3.11
     return datetime.fromisoformat(dt_str.rstrip("Z"))
 
 
@@ -277,18 +273,10 @@ def validate_event(event: dict, index: int) -> tuple[bool, str]:
     """
     Validate a single calendar event against the expected Microsoft Graph schema.
     Returns (is_valid, error_message).
-
-    Expected minimal structure:
-    {
-        "subject": str (optional, defaults to "(no title)"),
-        "start": {"dateTime": str, "timeZone": str (optional)},
-        "end": {"dateTime": str, "timeZone": str (optional)}
-    }
     """
     if not isinstance(event, dict):
         return False, f"Event {index}: not a dictionary (got {type(event).__name__})"
 
-    # Validate start field
     start = event.get("start")
     if not isinstance(start, dict):
         return False, f"Event {index}: missing or invalid 'start' field (expected dict)"
@@ -300,7 +288,6 @@ def validate_event(event: dict, index: int) -> tuple[bool, str]:
             f"Event {index}: missing or invalid 'start.dateTime' (expected non-empty string)",
         )
 
-    # Validate end field
     end = event.get("end")
     if not isinstance(end, dict):
         return False, f"Event {index}: missing or invalid 'end' field (expected dict)"
@@ -312,19 +299,17 @@ def validate_event(event: dict, index: int) -> tuple[bool, str]:
             f"Event {index}: missing or invalid 'end.dateTime' (expected non-empty string)",
         )
 
-    # Validate datetime format
     try:
         parse_date(start_dt)
         parse_date(end_dt)
     except ValueError as exc:
         return False, f"Event {index}: invalid datetime format - {exc}"
 
-    # Check that end is after start
     try:
         if parse_date(end_dt) <= parse_date(start_dt):
             return False, f"Event {index}: end time must be after start time"
     except Exception:
-        pass  # Already validated above
+        pass
 
     return True, ""
 
@@ -333,13 +318,6 @@ def validate_events(events: list[dict], max_errors: int = 5) -> tuple[list[dict]
     """
     Validate a list of events, filtering out invalid ones.
     Returns (valid_events, skipped_count).
-
-    Args:
-        events: List of event dictionaries to validate
-        max_errors: Maximum number of error messages to print
-
-    Returns:
-        Tuple of (valid_events_list, number_of_skipped_events)
     """
     valid = []
     skipped = 0
@@ -371,40 +349,15 @@ def group_appointments_by_company(
 ) -> dict[str, dict]:
     """
     Group events first by company (if mapping exists), then by client name.
-
-    If use_company_grouping is None, it will be enabled automatically if
-    a company mapping file exists and is not empty.
-
-    Returns a nested structure:
-    {
-        "company_name": {
-            "display_name": "Company Name",
-            "total_minutes": float,
-            "total_appointments": int,
-            "clients": {
-                "client_key": {
-                    "display_name": str,
-                    "total_minutes": float,
-                    "total_appointments": int,
-                    "total_duration": str,
-                    "appointments": [...]
-                }
-            }
-        }
-    }
     """
-    # First get standard client groups
     client_groups = _group_appointments_flat(events, normalize)
 
-    # Auto-enable company grouping if mapping exists
     if use_company_grouping is None:
         use_company_grouping = is_company_grouping_enabled()
 
     if not use_company_grouping:
-        # Return flat structure without company grouping
         return {"__ungrouped__": _convert_to_company_format(client_groups)}
 
-    # Build company hierarchy
     companies: dict[str, dict] = defaultdict(
         lambda: {
             "display_name": "",
@@ -430,10 +383,8 @@ def group_appointments_by_company(
             "appointments": client_data["appointments"],
         }
 
-    # Convert to regular dict and sort companies by total time
     result = dict(companies)
     for company in result.values():
-        # Sort clients within each company by total minutes
         company["clients"] = dict(
             sorted(
                 company["clients"].items(),
@@ -452,9 +403,7 @@ def _group_appointments_flat(
 ) -> dict[str, dict]:
     """
     Group appointments by client name (flat structure).
-    Returns the original flat grouping used before company feature.
     """
-    # First validate all events
     valid_events, validation_skipped = validate_events(events)
 
     groups: dict[str, dict] = defaultdict(
@@ -539,7 +488,6 @@ def group_appointments(events: list[dict], normalize: bool = True) -> dict[str, 
 def encode_to_base64(data: dict) -> str:
     """
     Encode a dictionary to base64 string with proper UTF-8 encoding.
-    This ensures accents and special characters are preserved.
     """
     json_str = json.dumps(data, ensure_ascii=False)
     json_bytes = json_str.encode("utf-8")
@@ -562,14 +510,7 @@ def decode_from_base64(b64_str: str) -> dict:
 
 def load_events_from_file(path: Path, validate: bool = True) -> list[dict] | None:
     """
-    Load a Graph API JSON file.  Accepts:
-    - A plain list  → returned as-is
-    - A dict with a 'value' key  → value returned
-
-    Args:
-        path: Path to the JSON file
-        validate: If True, validates event schema and filters invalid events
-
+    Load a Graph API JSON file. Accepts a plain list or a dict with 'value' key.
     Returns None and prints a warning on any error.
     """
     try:
@@ -593,7 +534,6 @@ def load_events_from_file(path: Path, validate: bool = True) -> list[dict] | Non
         print(f"  ⚠️  {path.name}: unexpected JSON type: {type(data).__name__}")
         return None
 
-    # Validate events if requested
     if validate and events:
         valid_events, skipped = validate_events(events)
         if skipped:
@@ -605,10 +545,8 @@ def load_events_from_file(path: Path, validate: bool = True) -> list[dict] | Non
 
 def export_processed_json(groups: dict[str, dict], output_path: Path) -> None:
     """Serialise grouped appointments to a JSON file."""
-    # Detect if we have company structure (has 'clients' key)
     first_group = next(iter(groups.values())) if groups else None
     if first_group and "clients" in first_group:
-        # Company-based structure
         result = []
         for company_name, company_data in groups.items():
             company_result = {
@@ -630,7 +568,6 @@ def export_processed_json(groups: dict[str, dict], output_path: Path) -> None:
                 )
             result.append(company_result)
     else:
-        # Flat structure (legacy)
         result = [
             {
                 "name": g["display_name"],
@@ -650,12 +587,10 @@ def export_processed_json(groups: dict[str, dict], output_path: Path) -> None:
 
 def export_csv(groups: dict[str, dict], output_path: Path) -> None:
     """
-    Export all appointments to a flat CSV file with columns:
-    company, group_name, subject, start, end, duration_min, duration, timezone
+    Export all appointments to a flat CSV file.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Detect structure
     first_group = next(iter(groups.values())) if groups else None
     is_company_grouped = first_group and "clients" in first_group
 
@@ -725,13 +660,7 @@ def process_directory(
     """
     Scan *directory* for *.json files (excluding *_grouped.json), process each,
     and return a list of file-result dicts ready for HTML rendering.
-
-    Args:
-        directory: Directory containing JSON files
-        normalize: Whether to normalize client names
-        use_company_grouping: If None, auto-enable if mapping file exists
     """
-    # Load company mapping if it exists
     if use_company_grouping is None:
         load_company_mapping()
         use_company_grouping = is_company_grouping_enabled()
@@ -790,7 +719,6 @@ def _build_file_result(
     total_min: float,
     unique_names: int | None = None,
 ) -> dict:
-    # Detect structure
     first_group = next(iter(groups.values())) if groups else None
     is_company_grouped = (
         first_group
@@ -799,7 +727,6 @@ def _build_file_result(
     )
 
     if is_company_grouped:
-        # Build result with company hierarchy
         groups_list = []
         for company_name, company_data in groups.items():
             company_info = {
@@ -834,8 +761,6 @@ def _build_file_result(
             "groups": groups_list,
         }
     else:
-        # Flat structure (legacy or ungrouped)
-        # For ungrouped, groups might have a single key "__ungrouped__"
         actual_groups = groups
         if "__ungrouped__" in groups:
             actual_groups = groups["__ungrouped__"]["clients"]
@@ -873,7 +798,6 @@ def render_bar_chart(groups: list[dict]) -> str:
     if not groups:
         return ""
 
-    # Determine if we have company groups
     if groups and groups[0].get("is_company"):
         max_min = max(g["total_minutes"] for g in groups) or 1
         rows = []
@@ -881,7 +805,7 @@ def render_bar_chart(groups: list[dict]) -> str:
             pct = round(g["total_minutes"] / max_min * 100, 1)
             label = g["name"][:22] + "…" if len(g["name"]) > 22 else g["name"]
             rows.append(
-                f'<div class="bar-row bar-row-company">'
+                f'<div class="bar-row bar-row-company" data-minutes="{g["total_minutes"]}" data-name="{g["name"]}">'
                 f'<span class="bar-label bar-label-company" title="{g["name"]}">🏢 {label}</span>'
                 f'<div class="bar-track"><div class="bar-fill" style="width:{pct}%"></div></div>'
                 f'<span class="bar-value">{g["total_duration"]}</span>'
@@ -894,7 +818,7 @@ def render_bar_chart(groups: list[dict]) -> str:
             pct = round(g["total_minutes"] / max_min * 100, 1)
             label = g["name"][:22] + "…" if len(g["name"]) > 22 else g["name"]
             rows.append(
-                f'<div class="bar-row">'
+                f'<div class="bar-row" data-minutes="{g["total_minutes"]}" data-name="{g["name"]}">'
                 f'<span class="bar-label" title="{g["name"]}">{label}</span>'
                 f'<div class="bar-track"><div class="bar-fill" style="width:{pct}%"></div></div>'
                 f'<span class="bar-value">{g["total_duration"]}</span>'
@@ -933,11 +857,9 @@ def get_invoice_settings_for_client(client_name: str, company_name: str = None) 
     """
     config = load_config()
 
-    # Start with global defaults
     settings = config.get("invoice_defaults", {}).get("defaults", {}).copy()
     from_defaults = config.get("invoice_defaults", {}).get("from", {}).copy()
 
-    # Override with company settings if provided
     if company_name:
         company_settings = config.get("company_settings", {}).get(company_name, {})
         if "defaults" in company_settings:
@@ -945,7 +867,6 @@ def get_invoice_settings_for_client(client_name: str, company_name: str = None) 
         if "from" in company_settings:
             from_defaults.update(company_settings["from"])
 
-    # Override with client-specific settings
     client_settings = config.get("client_settings", {}).get(client_name, {})
     if "defaults" in client_settings:
         settings.update(client_settings["defaults"])
@@ -961,10 +882,8 @@ def render_file_section(file_result: dict) -> str:
     collapse_clients = report_settings.get("collapse_clients_by_default", True)
 
     if is_company_grouped:
-        # Render company-based hierarchy
         name_groups_html = ""
         for company in file_result["groups"]:
-            # Company header
             company_clients_html = ""
             for client in company["clients"]:
                 table = render_appointments_table(client["appointments"])
@@ -984,13 +903,11 @@ def render_file_section(file_result: dict) -> str:
                         for a in client["appointments"]
                     ],
                 }
-                # Add settings for this client
                 client_settings = get_invoice_settings_for_client(
                     client["name"], company["name"]
                 )
                 invoice_payload["settings"] = client_settings
 
-                # Use the fixed encoding function
                 payload_b64 = encode_to_base64(invoice_payload)
 
                 safe_name = client["name"].replace("'", "&#39;").replace('"', "&quot;")
@@ -1014,7 +931,6 @@ def render_file_section(file_result: dict) -> str:
                     f"</div>"
                 )
 
-            # Add consolidated invoice button for the whole company
             company_payload = {
                 "groupName": company["name"],
                 "totalMinutes": company["total_minutes"],
@@ -1039,13 +955,11 @@ def render_file_section(file_result: dict) -> str:
                     for c in company["clients"]
                 ],
             }
-            # Add company settings
             company_settings = get_invoice_settings_for_client(
                 company["name"], company["name"]
             )
             company_payload["settings"] = company_settings
 
-            # Use the fixed encoding function
             company_payload_b64 = encode_to_base64(company_payload)
 
             safe_company_name = (
@@ -1075,7 +989,6 @@ def render_file_section(file_result: dict) -> str:
                 f"</div>"
             )
     else:
-        # Legacy flat rendering
         name_groups_html = ""
         for g in file_result["groups"]:
             table = render_appointments_table(g["appointments"])
@@ -1095,11 +1008,9 @@ def render_file_section(file_result: dict) -> str:
                     for a in g["appointments"]
                 ],
             }
-            # Add client settings
             client_settings = get_invoice_settings_for_client(g["name"], None)
             invoice_payload["settings"] = client_settings
 
-            # Use the fixed encoding function
             payload_b64 = encode_to_base64(invoice_payload)
 
             safe_name = g["name"].replace("'", "&#39;").replace('"', "&quot;")
@@ -1489,9 +1400,9 @@ body{{
   <p>No clients match "<span id="noResultsQuery"></span>".</p>
 </div>
 
-{file_sections}
+{{file_sections}}
 
-<p class="report-footer">{footer_label}</p>
+<p class="report-footer">{{footer_label}}</p>
 </div>
 
 <!-- ── Invoice modal ─────────────────────────────────────────────── -->
@@ -1700,43 +1611,48 @@ function applyFilters() {{
 
   clearBtn.classList.toggle('visible', q.length > 0);
 
-  let visibleCount = 0;
+  let anyVisibleTotal = 0;
 
   document.querySelectorAll('.file-section').forEach(section => {{
     const companies = Array.from(section.querySelectorAll('.company-group'));
     const flatGroups = Array.from(section.querySelectorAll('.name-group')).filter(g => !g.closest('.company-group'));
-    
-    let anyVisible = false;
+
+    let sectionVisible = false;
+
     companies.forEach(company => {{
       const companyName = company.dataset.company?.toLowerCase() || '';
       const clients = Array.from(company.querySelectorAll('.name-group'));
       let companyHasMatch = false;
-      
+
       clients.forEach(client => {{
         const clientName = client.dataset.name?.toLowerCase() || '';
         const match = !q || companyName.includes(q) || clientName.includes(q);
         client.style.display = match ? '' : 'none';
         if (match) companyHasMatch = true;
       }});
-      
+
       company.style.display = companyHasMatch ? '' : 'none';
       if (companyHasMatch) {{
-        anyVisible = true;
-        visibleCount++;
+        sectionVisible = true;
+        anyVisibleTotal++;
       }}
     }});
-    
+
     flatGroups.forEach(g => {{
       const name = (g.dataset.name || '').toLowerCase();
       const match = !q || name.includes(q);
       g.style.display = match ? '' : 'none';
-      if (match) anyVisible = true;
+      if (match) {{
+        sectionVisible = true;
+        anyVisibleTotal++;
+      }}
     }});
-    
-    section.style.display = anyVisible ? '' : 'none';
+
+    section.style.display = sectionVisible ? '' : 'none';
   }});
 
-  noResults.classList.toggle('visible', visibleCount === 0 && q.length > 0);
+  // Mostrar "no results" solo si hay búsqueda activa Y ningún elemento es visible
+  noResults.classList.toggle('visible', anyVisibleTotal === 0 && q.length > 0);
   if (q) {{ noResultsQ.textContent = q; }}
 }}
 
@@ -1803,12 +1719,11 @@ function openInvoiceModal(dataB64) {{
   _invoiceData = decodeBase64(dataB64);
   _isConsolidated = false;
   loadProvider();
-  
-  // Apply settings from config
+
   if (_invoiceData.settings) {{
     applySettingsToForm(_invoiceData.settings);
   }}
-  
+
   document.getElementById('to_name').value = _invoiceData.groupName;
   document.getElementById('to_tax').value  = '';
   document.getElementById('to_email').value = '';
@@ -1828,12 +1743,11 @@ function openCompanyInvoiceModal(dataB64) {{
   _invoiceData = decodeBase64(dataB64);
   _isConsolidated = true;
   loadProvider();
-  
-  // Apply settings from config
+
   if (_invoiceData.settings) {{
     applySettingsToForm(_invoiceData.settings);
   }}
-  
+
   document.getElementById('to_name').value = _invoiceData.groupName;
   document.getElementById('to_tax').value  = '';
   document.getElementById('to_email').value = '';
@@ -1878,7 +1792,7 @@ function generateInvoice() {{
   const fmtDate = s => s ? new Date(s).toLocaleDateString('es-ES') : '—';
 
   let rows = '';
-  
+
   if (_isConsolidated && d.clients) {{
     for (const client of d.clients) {{
       rows += `<tr style="background:#f5f5f3;"><td colspan="3"><strong>🏢 ${{client.name}}</strong></td><td style="text-align:right"><strong>${{client.totalDuration}}</strong></td></tr>`;

@@ -28,7 +28,6 @@ import json
 import os
 import sys
 from pathlib import Path
-
 import requests
 
 # ---------------------------------------------------------------------------
@@ -147,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         choices=range(1, 13),
         metavar="MONTH",
-        help="Month(s) to fetch (1–12). Accepts multiple values: -m 1 2 3",
+        help="Month(s) to fetch (1-12). Accepts multiple values: -m 1 2 3",
     )
     # Month: continuous range
     p.add_argument(
@@ -155,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         nargs=2,
         metavar=("FROM", "TO"),
-        help="Inclusive range of months: --month-range 1 6 fetches Jan–Jun",
+        help="Inclusive range of months: --month-range 1 6 fetches Jan-Jun",
     )
     p.add_argument(
         "-y",

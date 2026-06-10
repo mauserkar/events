@@ -39,6 +39,7 @@ import argparse
 import calendar
 import json
 import sys
+import os
 from pathlib import Path
 
 import requests
@@ -263,22 +264,11 @@ def _load_processed_files(processed_dir: Path) -> list[dict]:
                         "clients": clients_list,
                     }
                 )
-
-            results.append(
-                {
-                    "filename": pf.name,
-                    "total_appointments": total_appts,
-                    "total_minutes": total_min,
-                    "total_duration": format_duration(total_min),
-                    "unique_names": unique_names,
-                    "is_company_grouped": True,
-                    "groups": groups_list,
-                }
-            )
         else:
             # Flat format (legacy)
             total_min = sum(item.get("total_minutes", 0) for item in data)
             total_appts = sum(item.get("total_appointments", 0) for item in data)
+            unique_names = len(data)
 
             groups_list = [
                 {
@@ -291,21 +281,19 @@ def _load_processed_files(processed_dir: Path) -> list[dict]:
                 for item in data
             ]
 
-            results.append(
-                {
-                    "filename": pf.name,
-                    "total_appointments": total_appts,
-                    "total_minutes": total_min,
-                    "total_duration": format_duration(total_min),
-                    "unique_names": len(data),
-                    "is_company_grouped": False,
-                    "groups": groups_list,
-                }
-            )
-
-        print(
-            f"  ✅ {pf.name}: {total_appts} appointments, {unique_names if 'unique_names' in locals() else len(data)} names"
+        results.append(
+            {
+                "filename": pf.name,
+                "total_appointments": total_appts,
+                "total_minutes": total_min,
+                "total_duration": format_duration(total_min),
+                "unique_names": unique_names,
+                "is_company_grouped": "company" in data[0] if data else False,
+                "groups": groups_list,
+            }
         )
+
+        print(f"  ✅ {pf.name}: {total_appts} appointments, {unique_names} names")
 
     return results
 
@@ -407,8 +395,6 @@ def _resolve_months(args: argparse.Namespace) -> list[int]:
 
 
 def main() -> None:
-    import os
-
     parser = build_parser()
     args = parser.parse_args()
 
