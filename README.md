@@ -122,6 +122,9 @@ report_settings:
 1. Ve a [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer)
 2. Inicia sesión con tu cuenta de Microsoft 365
 3. Asegúrate de que el permiso **`Calendars.Read`** está concedido
+
+   ![Permisos de Calendar.Read](img/token_and_permissions.png)
+
 4. Copia el **Access Token** desde la pestaña *Access token*
 
 El token puede pasarse con `--token` o mediante la variable de entorno `TOKEN`:
