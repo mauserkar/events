@@ -126,32 +126,84 @@ report_settings:
 
 ![Permisos de Calendar.Read](img/token_and_permissions.png)
 
+---
+
+## Pipeline completo (recomendado)
+
+### 1. Descargar el binario
+
+Descarga el binario desde: <https://github.com/mauserkar/events/releases>
+
+### 2. Dar permisos de ejecución
+
+```bash
+cd ~/Downloads
+chmod +x events_macos_arm64
+```
+
+### 3. Añadirlo al PATH
+
+```bash
+mkdir -p ~/.local/bin
+mv events_macos_arm64 ~/.local/bin/events_macos_arm64
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+---
+
+## Uso básico
+
 El token puede pasarse con `--token` o mediante la variable de entorno `TOKEN`:
 
 ```bash
 export TOKEN=eyJ0eXAiOiJKV1Q...
 ```
 
----
-
-## 📖 Uso
-
-### Pipeline completo (recomendado)
-
-`main.py` ejecuta los tres pasos en orden: descarga → procesado → informe HTML.
-
 ```bash
 # Un mes
-python main.py -t <TOKEN> -m 3 -y 2026
-
+events_macos_arm64 -m 3 -y 2026
+ 
 # Varios meses
-python main.py -t <TOKEN> --month 1 2 3 -y 2026
-
+events_macos_arm64 --month 1 2 3 -y 2026
+ 
 # Rango de meses (enero a junio)
-python main.py -t <TOKEN> --month-range 1 6 -y 2026
+events_macos_arm64 --month-range 1 6 -y 2026
+```
 
-# Con variable de entorno
-TOKEN=<token> python main.py -m 5 -y 2026
+---
+
+## Opciones avanzadas
+
+| Flag | Descripción |
+|------|-------------|
+| `-t`, `--token` | Token de Microsoft Graph |
+| `-m`, `--month` | Mes(es) a descargar (1–12) |
+| `--month-range FROM TO` | Rango inclusivo de meses |
+| `-y`, `--year` | Año (ej. 2026) |
+| `--skip-fetch` | Omite la descarga, reutiliza los JSONs existentes |
+| `--skip-process` | Omite el procesado, regenera el HTML desde los procesados |
+| `--input-file FILE` | Procesa un único archivo JSON en lugar de llamar a la API |
+| `--output-dir DIR` | Directorio de salida para el informe HTML |
+| `--no-normalize` | Desactiva la normalización de nombres |
+| `--no-csv` | Omite la exportación CSV |
+| `--no-company` | Desactiva la agrupación por empresa |
+
+### Ejemplos de uso avanzado
+
+```bash
+# Reutilizar eventos ya descargados (sin red)
+events_macos_arm64 --skip-fetch -y 2026
+ 
+# Regenerar solo el HTML sin reprocesar
+events_macos_arm64 --skip-fetch --skip-process
+ 
+# Procesar un archivo concreto
+events_macos_arm64 --input-file ./data/marzo.json
+ 
+# Informe en directorio personalizado
+events_macos_arm64 -m 5 -y 2026 --output-dir ./mis_informes
+
 ```
 
 #### Opciones avanzadas de `main.py`
@@ -172,16 +224,16 @@ TOKEN=<token> python main.py -m 5 -y 2026
 
 ```bash
 # Reutilizar eventos ya descargados (sin red)
-python main.py --skip-fetch -y 2026
+events_macos_arm64 --skip-fetch -y 2026
 
 # Regenerar solo el HTML sin reprocesar
-python main.py --skip-fetch --skip-process
+events_macos_arm644 --skip-fetch --skip-process
 
 # Procesar un archivo concreto
-python main.py --input-file ./data/marzo.json
+events_macos_arm644 --input-file ./data/marzo.json
 
 # Informe en directorio personalizado
-python main.py -t <TOKEN> -m 5 -y 2026 --output-dir ./mis_informes
+events_macos_arm644  -m 5 -y 2026 --output-dir ./mis_informes
 ```
 
 ---
