@@ -6,7 +6,7 @@ Full calendar-events pipeline orchestrator:
   2. Process — Group by name, sum hours, export JSON + CSV
   3. Report  — Generate a self-contained interactive HTML report
 
-Supports company grouping: create reports/company_mapping.json to enable.
+Supports company grouping: create config.yaml to enable.
 
 Usage examples
 --------------
@@ -320,7 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         choices=range(1, 13),
         metavar="MONTH",
-        help="Month(s) to fetch (1–12). Accepts multiple: -m 1 2 3",
+        help="Month(s) to fetch (1-12). Accepts multiple: -m 1 2 3",
     )
     month_grp.add_argument(
         "--month-range",
@@ -349,7 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-company",
         dest="use_company",
         action="store_false",
-        help="Disable company grouping (even if company_mapping.json exists)",
+        help="Disable company grouping (even if config.yaml exists)",
     )
 
     # Skip flags
@@ -424,7 +424,7 @@ def main() -> None:
             print(f"🏢 Company grouping ENABLED")
         else:
             print(f"📋 No company mapping found - using flat grouping")
-            print(f"   Create reports/company_mapping.json to enable company grouping")
+            print(f"   Create config.yaml to enable company grouping")
     else:
         print(f"📋 Company grouping DISABLED by --no-company")
 

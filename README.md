@@ -119,13 +119,12 @@ report_settings:
 
 ## 🔑 Obtener el token de Microsoft Graph
 
-1. Ve a [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer)
-2. Inicia sesión con tu cuenta de Microsoft 365
-3. Asegúrate de que el permiso **`Calendars.Read`** está concedido
+1. Ve a [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer) y Inicia sesión con tu cuenta de Microsoft 365
+2. Pon esta url en el cuadro de get: <https://graph.microsoft.com/v1.0/me/calendar/calendarView>
+3. Asegúrate de que el permiso **`Calendars.Read`** y **`Calendars.ReadBasic`** está concedido en la seccion de **permissions granted**.
+4. Ves a la **Access Token** y copialo
 
-   ![Permisos de Calendar.Read](img/token_and_permissions.png)
-
-4. Copia el **Access Token** desde la pestaña *Access token*
+![Permisos de Calendar.Read](img/token_and_permissions.png)
 
 El token puede pasarse con `--token` o mediante la variable de entorno `TOKEN`:
 

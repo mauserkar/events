@@ -1398,12 +1398,11 @@ body{{
   <p>No clients match "<span id="noResultsQuery"></span>".</p>
 </div>
 
-{{file_sections}}
+{file_sections}
 
-<p class="report-footer">{{footer_label}}</p>
+<p class="report-footer">{footer_label}</p>
 </div>
 
-<!-- ── Invoice modal ─────────────────────────────────────────────── -->
 <div class="modal-overlay" id="invoiceModal">
   <div class="modal">
     <div class="modal-head">

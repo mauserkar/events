@@ -8,7 +8,7 @@ a single self-contained HTML report with:
   - Live search (client name) and sort controls
   - Per-group invoice generation (opens a print-ready page)
   - Provider details persisted in localStorage across sessions
-  - Company grouping support (auto-enabled if company_mapping.json exists)
+  - Company grouping support (auto-enabled if config.yaml exists)
 
 Usage
 -----
@@ -140,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-company",
         dest="use_company",
         action="store_false",
-        help="Disable company grouping (even if company_mapping.json exists)",
+        help="Disable company grouping (even if config.yaml exists)",
     )
     p.add_argument(
         "--csv",
