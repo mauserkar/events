@@ -19,8 +19,6 @@ Usage
     python report_events.py ./data/ --no-company   # disable company grouping
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from pathlib import Path

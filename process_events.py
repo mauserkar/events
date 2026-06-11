@@ -19,8 +19,6 @@ Input / output
              reports/processed/events.csv
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from pathlib import Path
@@ -75,13 +73,17 @@ def print_summary(groups: dict, use_company_grouping: bool) -> None:
             for client_data in company_data["clients"].values():
                 n = client_data["total_appointments"]
                 total = client_data["total_duration"]
-                print(f"     👤  {client_data['display_name']}  |  Appointments: {n}  |  Total: {total}")
+                print(
+                    f"     👤  {client_data['display_name']}  |  Appointments: {n}  |  Total: {total}"
+                )
     else:
         ungrouped = groups.get("__ungrouped__", {})
         for client_data in ungrouped.get("clients", {}).values():
             n = client_data["total_appointments"]
             total = client_data["total_duration"]
-            print(f"\n📅  {client_data['display_name']}  |  Appointments: {n}  |  Total: {total}")
+            print(
+                f"\n📅  {client_data['display_name']}  |  Appointments: {n}  |  Total: {total}"
+            )
 
     print("\n" + "=" * 60)
 

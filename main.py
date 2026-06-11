@@ -33,8 +33,6 @@ Usage examples
     python main.py -t <TOKEN> -m 3 -y 2026 --no-company
 """
 
-from __future__ import annotations
-
 import argparse
 import calendar
 import json

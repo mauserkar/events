@@ -20,8 +20,6 @@ Usage examples
     TOKEN=<token> python get_calendar_events.py -m 5 -y 2026
 """
 
-from __future__ import annotations
-
 import argparse
 import calendar
 import json

@@ -7,8 +7,6 @@ lives here so that process_events.py, report_events.py, get_calendar_events.py
 and main.py can import without any duplication.
 """
 
-from __future__ import annotations
-
 import base64
 import csv
 import json
