@@ -1472,15 +1472,11 @@ body{{
         </div>
       </div>
 
-      <div class="form-section-title">Rate &amp; taxes</div>
+      <div class="form-section-title">Rate</div>
       <div class="form-grid">
         <div class="form-group">
           <label>Hourly rate (€)</label>
           <input type="number" id="inv_rate" placeholder="75.00" min="0" step="0.01">
-        </div>
-        <div class="form-group">
-          <label>VAT / IVA (%)</label>
-          <input type="number" id="inv_vat" placeholder="21" min="0" max="100" value="21">
         </div>
         <div class="form-group full">
           <label>Bank account</label>
@@ -1648,7 +1644,6 @@ function applyFilters() {{
     section.style.display = sectionVisible ? '' : 'none';
   }});
 
-  // Mostrar "no results" solo si hay búsqueda activa Y ningún elemento es visible
   noResults.classList.toggle('visible', anyVisibleTotal === 0 && q.length > 0);
   if (q) {{ noResultsQ.textContent = q; }}
 }}
@@ -1696,7 +1691,6 @@ function applySettingsToForm(settings) {{
   }}
   if (settings && settings.defaults) {{
     if (settings.defaults.hourly_rate) document.getElementById('inv_rate').value = settings.defaults.hourly_rate;
-    if (settings.defaults.vat_rate) document.getElementById('inv_vat').value = settings.defaults.vat_rate;
     if (settings.defaults.payment_terms) {{
       const notes = document.getElementById('inv_notes').value;
       if (!notes.includes(settings.defaults.payment_terms)) {{
@@ -1779,12 +1773,9 @@ document.addEventListener('keydown', e => {{
 
 function generateInvoice() {{
   const d = _invoiceData;
-  const rate    = parseFloat(document.getElementById('inv_rate').value)  || 0;
-  const vatPct  = parseFloat(document.getElementById('inv_vat').value)   || 0;
+  const rate    = parseFloat(document.getElementById('inv_rate').value) || 0;
   const hours   = d.totalMinutes / 60;
-  const subtotal = hours * rate;
-  const vatAmt  = subtotal * vatPct / 100;
-  const total   = subtotal + vatAmt;
+  const total   = hours * rate;
   const fmt     = n => n.toLocaleString('es-ES',{{minimumFractionDigits:2,maximumFractionDigits:2}});
   const fmtDate = s => s ? new Date(s).toLocaleDateString('es-ES') : '—';
 
@@ -1892,8 +1883,6 @@ tbody tr:last-child td{{border-bottom:none}}
 <div class="totals">
   <div class="total-row"><span>Hours worked</span><span>${{hours.toFixed(2)}} h</span></div>
   <div class="total-row"><span>Rate</span><span>${{fmt(rate)}} €/h</span></div>
-  <div class="total-row"><span>Subtotal</span><span>${{fmt(subtotal)}} €</span></div>
-  <div class="total-row"><span>VAT (${{vatPct}}%)</span><span>${{fmt(vatAmt)}} €</span></div>
   <div class="total-row grand"><span>Total</span><span>${{fmt(total)}} €</span></div>
 </div>
 ${{notes ? '<div class="notes"><strong>Notes</strong>' + notes.replace(/\\n/g,'<br>') + '</div>' : ''}}
