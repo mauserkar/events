@@ -490,8 +490,7 @@ def main() -> None:
     print(f"   Files processed : {len(results)}")
     print(f"   Appointments    : {total_appts}")
     print(f"   Total time      : {total_time}")
-    print(f"   HTML report     : {report_path}")
-    print(f"   Open in browser : file://{report_path.absolute()}")
+    print(f"   Open in browser : {report_path.absolute()}")
     print("=" * 60)
 
 

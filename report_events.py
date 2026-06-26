@@ -177,8 +177,7 @@ def main() -> None:
     html = generate_html(results, footer_label="report_events.py")
     output_path.write_text(html, encoding="utf-8")
 
-    print(f"\n✅ Report generated: {output_path}")
-    print(f"   Open in browser: file://{output_path}")
+    print(f"   Open in browser: {output_path}")
 
 
 if __name__ == "__main__":

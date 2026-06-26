@@ -16,7 +16,6 @@ invoice_defaults:
   # Configuración por defecto
   defaults:
     hourly_rate: 75.0 # Tarifa por hora en euros
-    vat_rate: 21.0 # Porcentaje de IVA
     currency: "EUR"
     payment_terms: "Pago a 30 días"
     bank_account: "ES00 0000 0000 0000 0000 0000"
@@ -62,7 +61,6 @@ company_settings:
       reference: "Contrato ACME-2024-001"
     defaults:
       hourly_rate: 85.0 # Tarifa especial para ACME
-      vat_rate: 21.0
     notes: |
       Precios especiales según contrato marco.
       Facturación mensual por servicios prestados.
@@ -70,7 +68,6 @@ company_settings:
   "Empresa 2":
     defaults:
       hourly_rate: 95.0 # Tarifa premium
-      vat_rate: 21.0
     notes: |
       Servicios de consultoría tecnológica.
       Proyecto de transformación digital.
