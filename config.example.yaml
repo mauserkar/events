@@ -60,7 +60,7 @@ company_settings:
       reference: "Contrato ACME-2024-001"
     defaults:
       hourly_rate: 85.0 # Tarifa especial para ACME
-      irpf_rate: 15.0 # IRPF aplicable
+      irpf_rate: 0 # IRPF NO aplicable
     notes: |
       Precios especiales según contrato marco.
       Facturación mensual por servicios prestados.
@@ -68,7 +68,7 @@ company_settings:
   "Empresa 2":
     defaults:
       hourly_rate: 95.0 # Tarifa premium
-      irpf_rate: 15.0
+      irpf_rate: 10.0 # 10 % IRPF
     notes: |
       Servicios de consultoría tecnológica.
       Proyecto de transformación digital.

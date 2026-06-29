@@ -74,7 +74,7 @@ invoice_defaults:
     phone: "+34 900 123 456"
   defaults:
     hourly_rate: 75.0
-    vat_rate: 21.0
+    irpf_rate: 15.0
     payment_terms: "Pago a 30 días"
     bank_account: "ES00 0000 0000 0000 0000 0000"
 ```
@@ -145,7 +145,7 @@ chmod +x events_macos_arm64
 
 ```bash
 mkdir -p ~/.local/bin
-mv events_macos_arm64 ~/.local/bin/events_macos_arm64
+mv events_macos_arm64 ~/.local/bin/eventos
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
