@@ -16,6 +16,7 @@ invoice_defaults:
   # Configuración por defecto
   defaults:
     hourly_rate: 75.0 # Tarifa por hora en euros
+    irpf_rate: 15.0 # Retención IRPF en porcentaje (0 para desactivar)
     currency: "EUR"
     payment_terms: "Pago a 30 días"
     bank_account: "ES00 0000 0000 0000 0000 0000"
@@ -56,11 +57,10 @@ company_mapping:
 company_settings:
   "Empresa 1":
     from:
-      # Opcional: datos específicos para facturas de ACME
-      # Si no se especifican, usan los globales
       reference: "Contrato ACME-2024-001"
     defaults:
       hourly_rate: 85.0 # Tarifa especial para ACME
+      irpf_rate: 15.0 # IRPF aplicable
     notes: |
       Precios especiales según contrato marco.
       Facturación mensual por servicios prestados.
@@ -68,6 +68,7 @@ company_settings:
   "Empresa 2":
     defaults:
       hourly_rate: 95.0 # Tarifa premium
+      irpf_rate: 15.0
     notes: |
       Servicios de consultoría tecnológica.
       Proyecto de transformación digital.
@@ -78,6 +79,7 @@ client_settings:
   "Laura Martínez":
     defaults:
       hourly_rate: 60.0 # Tarifa reducida
+      irpf_rate: 0.0 # Sin retención IRPF
     notes: |
       Tarifa especial por convenio.
       Facturación trimestral.

@@ -1093,6 +1093,7 @@ _HTML_TEMPLATE = """\
   --amber-border:#fde68a;
   --red-bg:#fef2f2;
   --red-text:#dc2626;
+  --red-border:#fecaca;
   --radius:12px;
   --radius-sm:7px;
   --radius-xs:4px;
@@ -1106,7 +1107,7 @@ _HTML_TEMPLATE = """\
     --accent:#60a5fa;--accent-bg:#172554;--accent-text:#93c5fd;--accent-border:#1e3a5f;
     --green-bg:#052e16;--green-text:#4ade80;--green-border:#14532d;
     --amber-bg:#1c1400;--amber-text:#fbbf24;--amber-border:#451a03;
-    --red-bg:#2d0a0a;--red-text:#f87171;
+    --red-bg:#2d0a0a;--red-text:#f87171;--red-border:#7f1d1d;
   }}
 }}
 
@@ -1252,7 +1253,10 @@ body{{
 
 /* ── Appointments table ───────────────────────────────────────────── */
 .appt-table{{width:100%;border-collapse:collapse;font-size:12px}}
-.appt-table th{{text-align:left;padding:7px 13px;color:var(--text2);font-weight:500;border-bottom:0.5px solid var(--border);background:var(--surface);font-size:11px;text-transform:uppercase;letter-spacing:0.04em}}
+.appt-table th{{text-align:left;padding:7px 13px;color:var(--text2);font-weight:500;border-bottom:0.5px solid var(--border);background:var(--surface);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;user-select:none}}
+.appt-table th:hover{{color:var(--accent-text)}}
+.appt-table th.sort-asc::after{{content:" ▲";font-size:9px}}
+.appt-table th.sort-desc::after{{content:" ▼";font-size:9px}}
 .appt-table td{{padding:7px 13px;border-bottom:0.5px solid var(--border);color:var(--text)}}
 .appt-table tr:last-child td{{border-bottom:none}}
 .appt-table tr:hover td{{background:var(--surface2)}}
@@ -1318,6 +1322,11 @@ body{{
 }}
 .form-group input:focus,.form-group textarea:focus{{outline:none;border-color:var(--accent);background:var(--surface)}}
 .form-group textarea{{resize:vertical;min-height:64px}}
+.irpf-active{{
+  border-color:var(--red-text)!important;
+  background:var(--red-bg)!important;
+  color:var(--red-text)!important;
+}}
 .modal-foot{{
   display:flex;justify-content:flex-end;gap:8px;
   padding:13px 18px;border-top:0.5px solid var(--border);flex-shrink:0;
@@ -1354,7 +1363,7 @@ body{{
 <div class="page-header">
   <div class="page-header-left">
     <h1>📅 Appointments Report</h1>
-    <p>Generated on {generated_on} &mdash; {num_files} file(s) processed</p>
+    <p>Generated on {{generated_on}} &mdash; {num_files} file(s) processed</p>
   </div>
 </div>
 
@@ -1386,10 +1395,11 @@ body{{
   <div class="filter-sep"></div>
   <span class="filter-label">Sort:</span>
   <select class="filter-select" id="sortSelect">
+    <option value="name-asc">Name A→Z</option>
+    <option value="name-desc">Name Z→A</option>
     <option value="time-desc">Most time</option>
     <option value="time-asc">Least time</option>
     <option value="count-desc">Most appointments</option>
-    <option value="name-asc">Name A→Z</option>
   </select>
   <button class="btn-clear-search" id="clearSearch">✕ Clear</button>
 </div>
@@ -1472,11 +1482,16 @@ body{{
         </div>
       </div>
 
-      <div class="form-section-title">Rate</div>
+      <div class="form-section-title">Rate &amp; taxes</div>
       <div class="form-grid">
         <div class="form-group">
           <label>Hourly rate (€)</label>
           <input type="number" id="inv_rate" placeholder="75.00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>IRPF retention (%)</label>
+          <input type="number" id="inv_irpf" placeholder="15" min="0" max="100" step="0.01"
+                 title="Set to 0 to disable IRPF retention">
         </div>
         <div class="form-group full">
           <label>Bank account</label>
@@ -1501,25 +1516,20 @@ body{{
 // ── Constants ──────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'appt_report_provider_v1';
 const PROVIDER_FIELDS = ['from_name','from_tax','from_email','from_phone','from_address'];
-const CLIENT_FIELDS = ['to_name','to_tax','to_email','to_address'];
 
-// Helper function to decode base64 with UTF-8 support
+// Helper: decode base64 with full UTF-8 support
 function decodeBase64(b64Str) {{
   try {{
     const binary = atob(b64Str);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {{
-      bytes[i] = binary.charCodeAt(i);
-    }}
-    const decoded = new TextDecoder('utf-8').decode(bytes);
-    return JSON.parse(decoded);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
   }} catch(e) {{
-    console.error('Failed to decode base64:', e);
     return JSON.parse(atob(b64Str));
   }}
 }}
 
-// ── Provider data persistence ──────────────────────────────────────────────
+// ── Provider persistence ───────────────────────────────────────────────────
 function saveProvider() {{
   const data = {{}};
   PROVIDER_FIELDS.forEach(id => {{ data[id] = document.getElementById(id).value; }});
@@ -1527,21 +1537,17 @@ function saveProvider() {{
   document.getElementById('savedNotice').classList.add('visible');
   setTimeout(() => document.getElementById('savedNotice').classList.remove('visible'), 1800);
 }}
-
 function loadProvider() {{
   try {{
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
     PROVIDER_FIELDS.forEach(id => {{
-      if (data[id] !== undefined && document.getElementById(id)) {{
+      if (data[id] !== undefined && document.getElementById(id))
         document.getElementById(id).value = data[id];
-      }}
     }});
   }} catch(e) {{}}
 }}
-
-// Auto-save on blur for provider fields
 PROVIDER_FIELDS.forEach(id => {{
   const el = document.getElementById(id);
   if (el) el.addEventListener('blur', saveProvider);
@@ -1550,21 +1556,21 @@ PROVIDER_FIELDS.forEach(id => {{
 // ── Collapse / expand ──────────────────────────────────────────────────────
 document.querySelectorAll('.file-header').forEach(h => {{
   h.addEventListener('click', () => {{
-    const body = h.nextElementSibling;
+    const body    = h.nextElementSibling;
     const chevron = h.querySelector('.chevron');
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'block';
-    chevron.style.transform = open ? 'rotate(-90deg)' : '';
+    const open    = body.style.display !== 'none';
+    body.style.display          = open ? 'none' : 'block';
+    chevron.style.transform     = open ? 'rotate(-90deg)' : '';
   }});
 }});
 
 document.querySelectorAll('.company-header').forEach(h => {{
-  h.addEventListener('click', (e) => {{
+  h.addEventListener('click', e => {{
     if (e.target.closest('.btn-invoice')) return;
-    const body = h.nextElementSibling;
+    const body    = h.nextElementSibling;
     const chevron = h.querySelector('.company-chevron');
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'block';
+    const open    = body.style.display !== 'none';
+    body.style.display      = open ? 'none' : 'block';
     chevron.style.transform = open ? 'rotate(-90deg)' : '';
   }});
 }});
@@ -1572,91 +1578,194 @@ document.querySelectorAll('.company-header').forEach(h => {{
 document.querySelectorAll('.company-chevron-wrap').forEach(wrap => {{
   wrap.addEventListener('click', () => {{
     const company = wrap.closest('.company-group');
-    const body = company.querySelector('.company-body');
+    const body    = company.querySelector('.company-body');
     const chevron = wrap.querySelector('.company-chevron');
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'block';
+    const open    = body.style.display !== 'none';
+    body.style.display      = open ? 'none' : 'block';
     chevron.style.transform = open ? 'rotate(-90deg)' : '';
   }});
 }});
 
 document.querySelectorAll('.name-chevron-wrap').forEach(wrap => {{
   wrap.addEventListener('click', () => {{
-    const group = wrap.closest('.name-group');
-    const body = group.querySelector('.name-body');
+    const group   = wrap.closest('.name-group');
+    const body    = group.querySelector('.name-body');
     const chevron = wrap.querySelector('.name-chevron');
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'block';
+    const open    = body.style.display !== 'none';
+    body.style.display      = open ? 'none' : 'block';
     chevron.style.transform = open ? 'rotate(-90deg)' : '';
   }});
 }});
 
-// ── Search & sort ──────────────────────────────────────────────────────────
-const searchInput  = document.getElementById('searchInput');
-const sortSelect   = document.getElementById('sortSelect');
-const clearBtn     = document.getElementById('clearSearch');
-const noResults    = document.getElementById('noResults');
-const noResultsQ   = document.getElementById('noResultsQuery');
+// ── Sortable appointment tables ────────────────────────────────────────────
+// Each .appt-table th gets a click handler to sort its tbody rows.
+// Column indices: 0=Start, 1=End, 2=Duration, 3=Timezone
+// Sort state is per-table: {{ col, asc }}
+document.querySelectorAll('.appt-table').forEach(table => {{
+  const state = {{ col: 0, asc: true }};   // default: Start ascending
+  const tbody = table.querySelector('tbody');
+  const ths   = Array.from(table.querySelectorAll('thead th'));
+
+  function sortTable(colIdx) {{
+    if (state.col === colIdx) {{
+      state.asc = !state.asc;
+    }} else {{
+      state.col = colIdx;
+      state.asc = true;
+    }}
+
+    // Update header indicators
+    ths.forEach((th, i) => {{
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (i === state.col) th.classList.add(state.asc ? 'sort-asc' : 'sort-desc');
+    }});
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {{
+      const ta = a.cells[state.col]?.textContent.trim() || '';
+      const tb = b.cells[state.col]?.textContent.trim() || '';
+      // Duration column (index 2): parse as minutes for numeric sort
+      if (state.col === 2) {{
+        return (parseDurationToMin(ta) - parseDurationToMin(tb)) * (state.asc ? 1 : -1);
+      }}
+      return ta.localeCompare(tb, 'es', {{sensitivity:'base'}}) * (state.asc ? 1 : -1);
+    }});
+    rows.forEach(r => tbody.appendChild(r));
+  }}
+
+  ths.forEach((th, i) => {{
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => sortTable(i));
+  }});
+
+  // Apply default sort (Start ascending) on load
+  sortTable(0);
+}});
+
+function parseDurationToMin(str) {{
+  // Accepts "1h 30m", "2h", "45m"
+  const hMatch = str.match(/(\\d+)h/);
+  const mMatch = str.match(/(\\d+)m/);
+  return (hMatch ? parseInt(hMatch[1]) * 60 : 0) + (mMatch ? parseInt(mMatch[1]) : 0);
+}}
+
+// ── Search & sort (groups) ─────────────────────────────────────────────────
+const searchInput = document.getElementById('searchInput');
+const sortSelect  = document.getElementById('sortSelect');
+const clearBtn    = document.getElementById('clearSearch');
+const noResults   = document.getElementById('noResults');
+const noResultsQ  = document.getElementById('noResultsQuery');
+
+// Read minutes stored in the green badge (set below)
+function getMinutes(el) {{ return parseFloat(el.dataset.min || '0'); }}
+function getCount(el)   {{ return parseInt(el.dataset.count  || '0'); }}
+function getName(el)    {{ return (el.dataset.name || '').toLowerCase(); }}
+
+function sortElements(parent, selector, keyFn, ascending) {{
+  const items = Array.from(parent.querySelectorAll(':scope > ' + selector));
+  items.sort((a, b) => {{
+    const ka = keyFn(a), kb = keyFn(b);
+    if (typeof ka === 'string') return ka.localeCompare(kb, 'es', {{sensitivity:'base'}}) * (ascending ? 1 : -1);
+    return (ka - kb) * (ascending ? 1 : -1);
+  }});
+  items.forEach(el => parent.appendChild(el));
+}}
 
 function applyFilters() {{
-  const q = searchInput.value.trim().toLowerCase();
+  const q    = searchInput.value.trim().toLowerCase();
   const sort = sortSelect.value;
 
   clearBtn.classList.toggle('visible', q.length > 0);
 
+  // ── Sort company groups and flat name-groups inside each file section ──
+  document.querySelectorAll('.file-section').forEach(section => {{
+    const fileBody = section.querySelector('.file-body');
+
+    // Sort company blocks
+    const companyBlocks = fileBody.querySelectorAll(':scope > .company-group');
+    if (companyBlocks.length > 0) {{
+      sortElements(fileBody, '.company-group', el => {{
+        if (sort === 'name-asc' || sort === 'name-desc')
+          return (el.dataset.company || '').toLowerCase();
+        if (sort === 'time-asc' || sort === 'time-desc')
+          return getMinutes(el.querySelector('.badge-green'));
+        if (sort === 'count-desc')
+          return getCount(el.querySelector('.badge-blue'));
+        return (el.dataset.company || '').toLowerCase();
+      }}, sort === 'time-asc' || sort === 'name-asc');
+
+      // Sort clients inside each company
+      companyBlocks.forEach(company => {{
+        const clientsWrap = company.querySelector('.company-clients');
+        if (!clientsWrap) return;
+        sortElements(clientsWrap, '.name-group', el => {{
+          if (sort === 'name-asc' || sort === 'name-desc') return getName(el);
+          if (sort === 'time-asc' || sort === 'time-desc') return getMinutes(el.querySelector('.badge-green'));
+          if (sort === 'count-desc') return getCount(el.querySelector('.badge-blue'));
+          return getName(el);
+        }}, sort === 'time-asc' || sort === 'name-asc');
+      }});
+    }}
+
+    // Sort flat name-groups (no company wrapper)
+    const flatGroups = fileBody.querySelectorAll(':scope > .name-group');
+    if (flatGroups.length > 0) {{
+      sortElements(fileBody, '.name-group', el => {{
+        if (sort === 'name-asc' || sort === 'name-desc') return getName(el);
+        if (sort === 'time-asc' || sort === 'time-desc') return getMinutes(el.querySelector('.badge-green'));
+        if (sort === 'count-desc') return getCount(el.querySelector('.badge-blue'));
+        return getName(el);
+      }}, sort === 'time-asc' || sort === 'name-asc');
+    }}
+  }});
+
+  // ── Filter visibility ──────────────────────────────────────────────
   let anyVisibleTotal = 0;
 
   document.querySelectorAll('.file-section').forEach(section => {{
-    const companies = Array.from(section.querySelectorAll('.company-group'));
-    const flatGroups = Array.from(section.querySelectorAll('.name-group')).filter(g => !g.closest('.company-group'));
-
+    const companies  = Array.from(section.querySelectorAll('.company-group'));
+    const flatGroups = Array.from(section.querySelectorAll('.name-group'))
+                            .filter(g => !g.closest('.company-group'));
     let sectionVisible = false;
 
     companies.forEach(company => {{
-      const companyName = company.dataset.company?.toLowerCase() || '';
-      const clients = Array.from(company.querySelectorAll('.name-group'));
+      const companyName = (company.dataset.company || '').toLowerCase();
+      const clients     = Array.from(company.querySelectorAll('.name-group'));
       let companyHasMatch = false;
 
       clients.forEach(client => {{
-        const clientName = client.dataset.name?.toLowerCase() || '';
+        const clientName = (client.dataset.name || '').toLowerCase();
         const match = !q || companyName.includes(q) || clientName.includes(q);
         client.style.display = match ? '' : 'none';
         if (match) companyHasMatch = true;
       }});
 
       company.style.display = companyHasMatch ? '' : 'none';
-      if (companyHasMatch) {{
-        sectionVisible = true;
-        anyVisibleTotal++;
-      }}
+      if (companyHasMatch) {{ sectionVisible = true; anyVisibleTotal++; }}
     }});
 
     flatGroups.forEach(g => {{
-      const name = (g.dataset.name || '').toLowerCase();
-      const match = !q || name.includes(q);
+      const match = !q || (g.dataset.name || '').toLowerCase().includes(q);
       g.style.display = match ? '' : 'none';
-      if (match) {{
-        sectionVisible = true;
-        anyVisibleTotal++;
-      }}
+      if (match) {{ sectionVisible = true; anyVisibleTotal++; }}
     }});
 
     section.style.display = sectionVisible ? '' : 'none';
   }});
 
   noResults.classList.toggle('visible', anyVisibleTotal === 0 && q.length > 0);
-  if (q) {{ noResultsQ.textContent = q; }}
+  if (q) noResultsQ.textContent = q;
 }}
 
-searchInput.addEventListener('input', applyFilters);
-sortSelect.addEventListener('change', applyFilters);
+searchInput.addEventListener('input',  applyFilters);
+sortSelect.addEventListener('change',  applyFilters);
 clearBtn.addEventListener('click', () => {{
   searchInput.value = '';
   applyFilters();
   searchInput.focus();
 }});
 
-// Attach data attributes for sort (minutes & count) to badges
+// Stamp data-min and data-count on every name-group for fast sorting
 document.querySelectorAll('.name-group').forEach(g => {{
   const greenBadge = g.querySelector('.badge-green');
   const blueBadge  = g.querySelector('.badge-blue');
@@ -1664,10 +1773,7 @@ document.querySelectorAll('.name-group').forEach(g => {{
   if (invoiceBtn && greenBadge) {{
     try {{
       const match = invoiceBtn.getAttribute('onclick').match(/'([^']+)'/);
-      if (match) {{
-        const payload = decodeBase64(match[1]);
-        greenBadge.dataset.min = payload.totalMinutes;
-      }}
+      if (match) {{ greenBadge.dataset.min = decodeBase64(match[1]).totalMinutes; }}
     }} catch(e) {{}}
   }}
   if (blueBadge) {{
@@ -1676,147 +1782,156 @@ document.querySelectorAll('.name-group').forEach(g => {{
   }}
 }});
 
+// Stamp data-min on company badges too
+document.querySelectorAll('.company-group').forEach(cg => {{
+  const greenBadge = cg.querySelector('.company-meta .badge-green');
+  const blueBadge  = cg.querySelector('.company-meta .badge-blue');
+  if (greenBadge) {{
+    // Sum minutes from child name-groups
+    let total = 0;
+    cg.querySelectorAll('.name-group .badge-green').forEach(b => {{
+      total += parseFloat(b.dataset.min || '0');
+    }});
+    greenBadge.dataset.min = total;
+  }}
+  if (blueBadge) {{
+    const m = blueBadge.textContent.match(/\\d+/);
+    if (m) blueBadge.dataset.count = m[0];
+  }}
+}});
+
+// Apply default sort (name A→Z) on page load
+applyFilters();
+
 // ── Invoice modal ──────────────────────────────────────────────────────────
-let _invoiceData = null;
+let _invoiceData    = null;
 let _isConsolidated = false;
 
 function applySettingsToForm(settings) {{
   if (settings && settings.from) {{
-    if (settings.from.name) document.getElementById('from_name').value = settings.from.name;
-    if (settings.from.tax_id) document.getElementById('from_tax').value = settings.from.tax_id;
-    if (settings.from.email) document.getElementById('from_email').value = settings.from.email;
-    if (settings.from.phone) document.getElementById('from_phone').value = settings.from.phone;
-    if (settings.from.address) document.getElementById('from_address').value = settings.from.address;
-    if (settings.from.bank_account) document.getElementById('inv_bank').value = settings.from.bank_account;
+    if (settings.from.name)         document.getElementById('from_name').value    = settings.from.name;
+    if (settings.from.tax_id)       document.getElementById('from_tax').value     = settings.from.tax_id;
+    if (settings.from.email)        document.getElementById('from_email').value   = settings.from.email;
+    if (settings.from.phone)        document.getElementById('from_phone').value   = settings.from.phone;
+    if (settings.from.address)      document.getElementById('from_address').value = settings.from.address;
+    if (settings.from.bank_account) document.getElementById('inv_bank').value     = settings.from.bank_account;
   }}
   if (settings && settings.defaults) {{
-    if (settings.defaults.hourly_rate) document.getElementById('inv_rate').value = settings.defaults.hourly_rate;
+    if (settings.defaults.hourly_rate !== undefined)
+      document.getElementById('inv_rate').value  = settings.defaults.hourly_rate;
+    if (settings.defaults.irpf_rate !== undefined)
+      document.getElementById('inv_irpf').value  = settings.defaults.irpf_rate;
     if (settings.defaults.payment_terms) {{
       const notes = document.getElementById('inv_notes').value;
-      if (!notes.includes(settings.defaults.payment_terms)) {{
+      if (!notes.includes(settings.defaults.payment_terms))
         document.getElementById('inv_notes').value = settings.defaults.payment_terms + '\\n\\n' + notes;
-      }}
     }}
     if (settings.defaults.notes) {{
       const notes = document.getElementById('inv_notes').value;
-      if (!notes.includes(settings.defaults.notes)) {{
+      if (!notes.includes(settings.defaults.notes))
         document.getElementById('inv_notes').value = settings.defaults.notes + '\\n\\n' + notes;
-      }}
     }}
   }}
 }}
 
-function openInvoiceModal(dataB64) {{
-  _invoiceData = decodeBase64(dataB64);
-  _isConsolidated = false;
+function _openModalCommon(dataB64, consolidated) {{
+  _invoiceData    = decodeBase64(dataB64);
+  _isConsolidated = consolidated;
   loadProvider();
 
-  if (_invoiceData.settings) {{
-    applySettingsToForm(_invoiceData.settings);
-  }}
+  document.getElementById('inv_irpf').value = 15; // default before config override
+  if (_invoiceData.settings) applySettingsToForm(_invoiceData.settings);
 
-  document.getElementById('to_name').value = _invoiceData.groupName;
-  document.getElementById('to_tax').value  = '';
-  document.getElementById('to_email').value = '';
+  document.getElementById('to_name').value    = _invoiceData.groupName;
+  document.getElementById('to_tax').value     = '';
+  document.getElementById('to_email').value   = '';
   document.getElementById('to_address').value = '';
 
   const now = new Date();
-  const pad = n => String(n).padStart(2,'0');
+  const pad = n => String(n).padStart(2, '0');
   document.getElementById('inv_number').value =
-    'INV-' + now.getFullYear() + '-' + pad(now.getMonth()+1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes());
-  document.getElementById('inv_date').value = now.toISOString().slice(0,10);
-  const due = new Date(now); due.setDate(due.getDate()+30);
-  document.getElementById('inv_due').value = due.toISOString().slice(0,10);
+    'INV-' + now.getFullYear() + '-' + pad(now.getMonth()+1) + pad(now.getDate()) +
+    '-' + pad(now.getHours()) + pad(now.getMinutes());
+  document.getElementById('inv_date').value = now.toISOString().slice(0, 10);
+  const due = new Date(now); due.setDate(due.getDate() + 30);
+  document.getElementById('inv_due').value  = due.toISOString().slice(0, 10);
+
+  _updateIrpfHighlight();
   document.getElementById('invoiceModal').classList.add('open');
 }}
 
-function openCompanyInvoiceModal(dataB64) {{
-  _invoiceData = decodeBase64(dataB64);
-  _isConsolidated = true;
-  loadProvider();
+function openInvoiceModal(dataB64)        {{ _openModalCommon(dataB64, false); }}
+function openCompanyInvoiceModal(dataB64) {{ _openModalCommon(dataB64, true);  }}
 
-  if (_invoiceData.settings) {{
-    applySettingsToForm(_invoiceData.settings);
-  }}
-
-  document.getElementById('to_name').value = _invoiceData.groupName;
-  document.getElementById('to_tax').value  = '';
-  document.getElementById('to_email').value = '';
-  document.getElementById('to_address').value = '';
-
-  const now = new Date();
-  const pad = n => String(n).padStart(2,'0');
-  document.getElementById('inv_number').value =
-    'INV-' + now.getFullYear() + '-' + pad(now.getMonth()+1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes());
-  document.getElementById('inv_date').value = now.toISOString().slice(0,10);
-  const due = new Date(now); due.setDate(due.getDate()+30);
-  document.getElementById('inv_due').value = due.toISOString().slice(0,10);
-  document.getElementById('invoiceModal').classList.add('open');
+function _updateIrpfHighlight() {{
+  const el  = document.getElementById('inv_irpf');
+  const val = parseFloat(el.value) || 0;
+  el.classList.toggle('irpf-active', val > 0);
 }}
+document.getElementById('inv_irpf').addEventListener('input', _updateIrpfHighlight);
 
 function closeModal() {{
   document.getElementById('invoiceModal').classList.remove('open');
 }}
-
 document.getElementById('invoiceModal').addEventListener('click', e => {{
   if (e.target === e.currentTarget) closeModal();
 }});
-
 document.addEventListener('keydown', e => {{
   if (e.key === 'Escape') closeModal();
   if (e.key === 'f' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {{
-    e.preventDefault();
-    searchInput.focus();
-    searchInput.select();
+    e.preventDefault(); searchInput.focus(); searchInput.select();
   }}
 }});
 
 function generateInvoice() {{
-  const d = _invoiceData;
-  const rate    = parseFloat(document.getElementById('inv_rate').value) || 0;
-  const hours   = d.totalMinutes / 60;
-  const total   = hours * rate;
-  const fmt     = n => n.toLocaleString('es-ES',{{minimumFractionDigits:2,maximumFractionDigits:2}});
-  const fmtDate = s => s ? new Date(s).toLocaleDateString('es-ES') : '—';
+  const d        = _invoiceData;
+  const rate     = parseFloat(document.getElementById('inv_rate').value)  || 0;
+  const irpfPct  = parseFloat(document.getElementById('inv_irpf').value)  || 0;
+  const hours    = d.totalMinutes / 60;
+  const subtotal = hours * rate;
+  const irpfAmt  = subtotal * irpfPct / 100;
+  const total    = subtotal - irpfAmt;
+  const fmt      = n => n.toLocaleString('es-ES', {{minimumFractionDigits:2, maximumFractionDigits:2}});
+  const fmtDate  = s => s ? new Date(s).toLocaleDateString('es-ES') : '—';
 
   let rows = '';
-
   if (_isConsolidated && d.clients) {{
     for (const client of d.clients) {{
-      rows += `<tr style="background:#f5f5f3;"><td colspan="3"><strong>🏢 ${{client.name}}</strong></td><td style="text-align:right"><strong>${{client.totalDuration}}</strong></td></tr>`;
+      rows += `<tr style="background:#f5f5f3;">
+        <td colspan="3"><strong>🏢 ${{client.name}}</strong></td>
+        <td style="text-align:right"><strong>${{client.totalDuration}}</strong></td>
+      </tr>`;
       for (const apt of client.appointments) {{
         rows += `<tr>
           <td style="padding-left:24px">${{apt.subject}}</td>
-          <td>${{apt.start}}</td>
-          <td>${{apt.end}}</td>
+          <td>${{apt.start}}</td><td>${{apt.end}}</td>
           <td style="text-align:right">${{apt.duration}}</td>
         </tr>`;
       }}
     }}
   }} else {{
-    rows = d.appointments.map(a =>
-      `<tr>
-        <td>${{a.subject}}</td>
-        <td>${{a.start}}</td>
-        <td>${{a.end}}</td>
-        <td style="text-align:right">${{a.duration}}</td>
-      </tr>`
-    ).join('');
+    rows = d.appointments.map(a => `<tr>
+      <td>${{a.subject}}</td><td>${{a.start}}</td><td>${{a.end}}</td>
+      <td style="text-align:right">${{a.duration}}</td>
+    </tr>`).join('');
   }}
 
-  const notes = document.getElementById('inv_notes').value;
+  const irpfRows = irpfPct > 0
+    ? `<div class="total-row"><span>Subtotal</span><span>${{fmt(subtotal)}} €</span></div>
+       <div class="total-row irpf-row"><span>IRPF (${{irpfPct}}%)</span><span>&minus;${{fmt(irpfAmt)}} €</span></div>`
+    : `<div class="total-row"><span>Subtotal</span><span>${{fmt(subtotal)}} €</span></div>`;
+
+  const notes       = document.getElementById('inv_notes').value;
   const bankAccount = document.getElementById('inv_bank').value;
   const invoiceType = _isConsolidated ? 'Consolidated Invoice' : 'Invoice';
-  const fromPhone = document.getElementById('from_phone').value;
-  const fromEmail = document.getElementById('from_email').value;
-  const fromTax = document.getElementById('from_tax').value;
+  const fromPhone   = document.getElementById('from_phone').value;
+  const fromEmail   = document.getElementById('from_email').value;
+  const fromTax     = document.getElementById('from_tax').value;
   const fromAddress = document.getElementById('from_address').value;
-  const fromName = document.getElementById('from_name').value;
+  const fromName    = document.getElementById('from_name').value;
 
   const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
+<html lang="en"><head><meta charset="UTF-8">
 <title>${{invoiceType}} ${{document.getElementById('inv_number').value}}</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -1835,43 +1950,38 @@ thead th{{text-align:left;padding:8px 12px;background:#f5f5f3;font-weight:500;co
 thead th:last-child{{text-align:right}}
 tbody td{{padding:9px 12px;border-bottom:1px solid #f0f0ee;color:#18181a;vertical-align:top}}
 tbody tr:last-child td{{border-bottom:none}}
-.totals{{margin-left:auto;width:260px;margin-top:8px}}
+.totals{{margin-left:auto;width:280px;margin-top:8px}}
 .total-row{{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;color:#75746e}}
+.irpf-row{{color:#dc2626;font-weight:500}}
 .total-row.grand{{font-size:16px;font-weight:700;color:#18181a;border-top:2px solid #18181a;margin-top:8px;padding-top:10px}}
 .notes{{margin-top:36px;padding-top:20px;border-top:1px solid #e5e5e3;font-size:12px;color:#75746e;line-height:1.7;white-space:pre-wrap}}
 .notes strong{{color:#18181a;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em}}
 .bank-details{{margin-top:12px;padding:12px;background:#f5f5f3;border-radius:8px;font-size:11px}}
 @media print{{body{{padding:32px}}@page{{margin:0.8cm}}}}
-</style>
-</head>
-<body>
+</style></head><body>
 <div class="inv-header">
-  <div>
-    <div class="inv-title">${{invoiceType}}</div>
-    <div class="inv-number">#${{document.getElementById('inv_number').value}}</div>
-  </div>
+  <div><div class="inv-title">${{invoiceType}}</div>
+  <div class="inv-number">#${{document.getElementById('inv_number').value}}</div></div>
   <div class="inv-dates">
     <div>Issue date: <strong>${{fmtDate(document.getElementById('inv_date').value)}}</strong></div>
-    <div>Due date:   <strong>${{fmtDate(document.getElementById('inv_due').value)}}</strong></div>
+    <div>Due date: <strong>${{fmtDate(document.getElementById('inv_due').value)}}</strong></div>
   </div>
 </div>
 <div class="parties">
-  <div>
-    <div class="party-label">From</div>
+  <div><div class="party-label">From</div>
     <div class="party-name">${{fromName || '—'}}</div>
     <div class="party-detail">
-      ${{fromTax ? 'NIF: ' + fromTax + '<br>' : ''}}
-      ${{fromEmail || ''}}
-      ${{fromPhone ? '<br>Tel: ' + fromPhone : ''}}
-      ${{fromAddress ? '<br>' + fromAddress : ''}}
+      ${{fromTax     ? 'NIF: '    + fromTax    + '<br>' : ''}}
+      ${{fromEmail   || ''}}
+      ${{fromPhone   ? '<br>Tel: '+ fromPhone  : ''}}
+      ${{fromAddress ? '<br>'     + fromAddress: ''}}
     </div>
   </div>
-  <div>
-    <div class="party-label">Bill to</div>
+  <div><div class="party-label">Bill to</div>
     <div class="party-name">${{document.getElementById('to_name').value || '—'}}</div>
     <div class="party-detail">
-      ${{document.getElementById('to_tax').value ? 'NIF: ' + document.getElementById('to_tax').value + '<br>' : ''}}
-      ${{document.getElementById('to_email').value || ''}}
+      ${{document.getElementById('to_tax').value     ? 'NIF: ' + document.getElementById('to_tax').value + '<br>' : ''}}
+      ${{document.getElementById('to_email').value   || ''}}
       ${{document.getElementById('to_address').value ? '<br>' + document.getElementById('to_address').value : ''}}
     </div>
   </div>
@@ -1883,13 +1993,14 @@ tbody tr:last-child td{{border-bottom:none}}
 <div class="totals">
   <div class="total-row"><span>Hours worked</span><span>${{hours.toFixed(2)}} h</span></div>
   <div class="total-row"><span>Rate</span><span>${{fmt(rate)}} €/h</span></div>
+  ${{irpfRows}}
   <div class="total-row grand"><span>Total</span><span>${{fmt(total)}} €</span></div>
 </div>
-${{notes ? '<div class="notes"><strong>Notes</strong>' + notes.replace(/\\n/g,'<br>') + '</div>' : ''}}
+${{notes       ? '<div class="notes"><strong>Notes</strong>' + notes.replace(/\\n/g,'<br>') + '</div>' : ''}}
 ${{bankAccount ? '<div class="bank-details"><strong>Bank account:</strong> ' + bankAccount + '</div>' : ''}}
 </body></html>`;
 
-  const win = window.open('','_blank');
+  const win = window.open('', '_blank');
   if (!win) {{ alert('Please allow pop-ups to generate the invoice.'); return; }}
   win.document.write(html);
   win.document.close();
